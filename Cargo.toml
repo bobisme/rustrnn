@@ -1,0 +1,7 @@
+[package]
+name = "rustrnn"
+version = "0.1.0"
+authors = ["Bob <bob@arbor.io>"]
+
+[dependencies]
+rand = "*"
