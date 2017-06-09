@@ -50,7 +50,7 @@ impl IntGenerator {
             range: Range::new(from, to),
         }
     }
-    pub fn next(&mut self) -> i32 {
+    pub fn next_number(&mut self) -> i32 {
         let rng = &mut self.rng;
         self.range.ind_sample(rng)
     }
@@ -70,9 +70,9 @@ fn main() {
     let mut recurrent_layer_update = Matrix::new(HIDDEN_SIZE, HIDDEN_SIZE);
 
     for iteration in 0..1 {
-        let a = int_gen.next();
+        let a = int_gen.next_number();
         let a_bits = get_bits(a);
-        let b = int_gen.next();
+        let b = int_gen.next_number();
         let b_bits = get_bits(b);
         let c = a + b;
         let c_bits = get_bits(c);
@@ -90,8 +90,8 @@ fn main() {
         for (bit_pos, a_bit, b_bit, c_bit) in bits_iter {
             println!("a: {}, b: {}", a_bit, b_bit);
             let input_layer = Matrix::from(
-                1, INPUT_SIZE, &vec![a_bit as f64, b_bit as f64]);
-            let labels = Matrix::from(1, 1, &vec![c_bit as f64]);
+                1, INPUT_SIZE, &[a_bit as f64, b_bit as f64]);
+            let labels = Matrix::from(1, 1, &[c_bit as f64]);
 
             let hidden_layer = forward_hidden_layer(
                 &input_layer, &hidden_layer_weights,
@@ -124,7 +124,7 @@ fn main() {
         let mut next_hidden_layer_delta = Matrix::new(1, HIDDEN_SIZE);
         for i in 0..BIT_COUNT {
             let inputs = Matrix::from(
-                2, 1, &vec![a_bits[i] as f64, b_bits[i] as f64]);
+                2, 1, &[a_bits[i] as f64, b_bits[i] as f64]);
             let hidden_layer_index = hidden_layer_history.len() - i - 1;
             let hidden_layer = &hidden_layer_history[hidden_layer_index];
             let prev_hidden_layer = &hidden_layer_history[

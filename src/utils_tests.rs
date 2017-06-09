@@ -1,13 +1,13 @@
-macro_rules! assert_approx_eq {
-    ($a:expr, $b:expr) => ({
-        let (a, b) = (&$a, &$b);
-        assert!((*a - *b).abs() < 1.0e-6, "{} ≉ {}", *a, *b);
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use utils::*;
+
+    macro_rules! assert_approx_eq {
+        ($a:expr, $b:expr) => ({
+            let (a, b) = (&$a, &$b);
+            assert!((*a - *b).abs() < 1.0e-6, "{} ≉ {}", *a, *b);
+        })
+    }
 
     mod describe_sigmoid {
         use super::*;

@@ -28,11 +28,11 @@ impl Matrix {
         }
     }
 
-    pub fn from(rows: usize, cols: usize, data: &Vec<f64>) -> Matrix {
+    pub fn from(rows: usize, cols: usize, data: &[f64]) -> Matrix {
         Matrix {
             rows,
             cols,
-            data: data.clone(),
+            data: data.to_vec(),
         }
     }
 }
