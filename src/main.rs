@@ -9,13 +9,14 @@ mod layer;
 mod matrix;
 
 use utils::{Sigmoid};
-use matrix::{Matrix, Transpose};
+use matrix::{Matrix, Transpose, Dot};
 
-// const LEARNING_RATE: f64 = 0.1;
+const LEARNING_RATE: f64 = 0.1;
 const INPUT_SIZE: usize = 2;
 const HIDDEN_SIZE: usize = 16;
 const OUTPUT_SIZE: usize = 1;
 const BIT_COUNT: usize = 8;
+const ITERATIONS: usize = 100000;
 
 
 fn get_bits(i: i32) -> Vec<i32> {
@@ -27,13 +28,11 @@ fn forward_hidden_layer<'a, 'b>(
     previous_hidden: &'b Matrix,
     recurrent_weights: &'b Matrix) -> Matrix {
     // hidden layer forward
-    let current_op = match input * hidden_weights {
-        Ok(v) => v, Err(e) => panic!(e),
-    };
+    let current_op = input.dot(hidden_weights).expect("current_op");
     // recurrent step
-    let recurrent_op = match previous_hidden * recurrent_weights {
-        Ok(v) => v, Err(e) => panic!(e),
-    };
+    let recurrent_op = previous_hidden.dot(recurrent_weights).expect("recurrent_op");
+    // print!(
+    //     "input: {:?}\nhidden weights: {:?}\nprevious hidden: {:?}\nrecurrent_weights: {:?}\n", input, hidden_weights, previous_hidden, recurrent_weights);
     (current_op + &recurrent_op).sigmoid()
 }
 
@@ -69,7 +68,7 @@ fn main() {
     let mut output_layer_update = Matrix::new(HIDDEN_SIZE, OUTPUT_SIZE);
     let mut recurrent_layer_update = Matrix::new(HIDDEN_SIZE, HIDDEN_SIZE);
 
-    for iteration in 0..1 {
+    for iteration in 0..(ITERATIONS + 1) {
         let a = int_gen.next_number();
         let a_bits = get_bits(a);
         let b = int_gen.next_number();
@@ -88,7 +87,7 @@ fn main() {
             .map(|i| (i, a_bits[i], b_bits[i], c_bits[i]));
 
         for (bit_pos, a_bit, b_bit, c_bit) in bits_iter {
-            println!("a: {}, b: {}", a_bit, b_bit);
+            // println!("a: {}, b: {}", a_bit, b_bit);
             let input_layer = Matrix::from(
                 1, INPUT_SIZE, &[a_bit as f64, b_bit as f64]);
             let labels = Matrix::from(1, 1, &[c_bit as f64]);
@@ -99,22 +98,20 @@ fn main() {
                 &recurrent_layer_weights);
 
             // output layer forward
-            let output_layer_op = match &hidden_layer * &output_layer_weights {
-                Ok(v) => v, Err(e) => panic!(e)
-            };
+            let output_layer_op = (&hidden_layer).dot(&output_layer_weights).unwrap();
             let output_layer = output_layer_op.sigmoid();
 
             let output_error = labels - &output_layer;
             overall_error += output_error[(0, 0)].abs();
 
             // set the predicted bit
+            // print!("probability for bit {}: {}\n", bit_pos, output_layer[(0, 0)]);
             prediction[bit_pos] = output_layer[(0, 0)].round() as i32;
 
             // save the deltaas for each timestep
             let output_derivative = output_layer.sigmoid_derivative();
-            let output_delta = match output_error * &output_derivative {
-                Ok(v) => v, Err(e) => panic!(e),
-            };
+            let output_delta = (output_error * &output_derivative)
+                .expect("output delta");
             output_deltas.push(output_delta);
 
             // store the output of the hidden layer for the next timestep
@@ -133,46 +130,43 @@ fn main() {
             let output_delta = &output_deltas[output_deltas.len() - i - 1];
             let recurrent_dot = {
                 let delta = &next_hidden_layer_delta;
-                let weights = &recurrent_layer_weights;
-                let trans = weights.transpose();
-                match delta * trans {
-                    Ok(v) => v, Err(e) => panic!(e),
-                }
+                let trans_weights = (&recurrent_layer_weights).transpose();
+                delta.dot(trans_weights).expect("OK")
             };
+
             let hidden_layer_delta = {
-                let weights = &hidden_layer_weights;
-                let trans = weights.transpose();
-                println!("{:?}\n{:?}", output_delta, trans);
-                let output_delta_dot = match output_delta * trans {
-                    Ok(v) => v, Err(e) => panic!(e)
-                };
+                let trans_weights = (&output_layer_weights).transpose();
+                let output_delta_dot = output_delta.dot(trans_weights)
+                    .expect("output delta");
                 let hidden_differential = hidden_layer.sigmoid_derivative();
-                (recurrent_dot + &output_delta_dot) * &hidden_differential
-            }.unwrap();
+                let lhs = recurrent_dot + &output_delta_dot;
+                // print!("{:?}\n{:?}\n", lhs, hidden_differential);
+                lhs * hidden_differential
+            }.expect("hidden layer delta");
+
+            assert_eq!(hidden_layer_delta.cols, 16);
+            assert_eq!(hidden_layer_delta.rows, 1);
 
             output_layer_update +=
-                match hidden_layer.transpose() * output_delta {
-                    Ok(v) => v, Err(e) => panic!(e)
-                };
+                hidden_layer.transpose().dot(output_delta)
+                .expect("output update");
             recurrent_layer_update +=
-                match prev_hidden_layer.transpose() * &hidden_layer_delta {
-                    Ok(v) => v, Err(e) => panic!(e)
-                };
+                prev_hidden_layer.transpose().dot(&hidden_layer_delta)
+                .expect("recurrent layer update");
             hidden_layer_update +=
-                match inputs.transpose() * &hidden_layer_delta {
-                    Ok(v) => v, Err(e) => panic!(e)
-                };
+                inputs.dot(&hidden_layer_delta)
+                .expect("hidden layer update");
 
             next_hidden_layer_delta = hidden_layer_delta;
         }
 
-        hidden_layer_weights += &hidden_layer_update;
-        output_layer_weights += &output_layer_update;
-        recurrent_layer_weights += &recurrent_layer_update;
+        hidden_layer_weights += &hidden_layer_update * LEARNING_RATE;
+        output_layer_weights += &output_layer_update * LEARNING_RATE;
+        recurrent_layer_weights += &recurrent_layer_update * LEARNING_RATE;
 
-        hidden_layer_weights *= 0.0;
-        output_layer_weights *= 0.0;
-        recurrent_layer_weights *= 0.0;
+        hidden_layer_update *= 0.0;
+        output_layer_update *= 0.0;
+        recurrent_layer_update *= 0.0;
 
         if iteration % 1000 == 0 {
             println!("Error: {}", overall_error);
